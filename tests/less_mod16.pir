@@ -8,7 +8,33 @@
 // Ensure that the given argument is 1 or 0, and returns it
 def bool x = { x*(x-1) = 0; x };
 
-// Decompose a number into its two's complement representation.
+// Decompose a number into its 15-bit two's complement representation.
+// It also range checks for -2^14 <= x < 2^14.
+def twosComp15 a = {
+  def a14 = bool (fresh (($a)));
+  def b = a + 16384*a14;
+
+  def a0 = bool (fresh ((b\1) % 2));
+  def a1 = bool (fresh ((b\2) % 2));
+  def a2 = bool (fresh ((b\4) % 2));
+  def a3 = bool (fresh ((b\8) % 2));
+  def a4 = bool (fresh ((b\16) % 2));
+  def a5 = bool (fresh ((b\32) % 2));
+  def a6 = bool (fresh ((b\64) % 2));
+  def a7 = bool (fresh ((b\128) % 2));
+  def a8 = bool (fresh ((b\256) % 2));
+  def a9 = bool (fresh ((b\512) % 2));
+  def a10 = bool (fresh ((b\1024) % 2));
+  def a11 = bool (fresh ((b\2048) % 2));
+  def a12 = bool (fresh ((b\4096) % 2));
+  def a13 = bool (fresh ((b\8192) % 2));
+
+  def a = 1*a0 + 2*a1 + 4*a2 + 8*a3 + 16*a4 + 32*a5 + 64*a6 + 128*a7 + 256*a8 + 512*a9 + 1024*a10 + 2048*a11 + 4096*a12 + 8192*a13 - 16384*a14;
+
+  (a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, ())
+};
+
+// Decompose a number into its 16-bit two's complement representation.
 // It also range checks for -2^15 <= x < 2^15.
 def twosComp16 a = {
   def a15 = bool (fresh (($a)));
@@ -66,8 +92,8 @@ def negative16 a = 1 - nonNegative16 a;
 // Test if a is less than b
 def less16 a b = {
   // Range checks
-  twosComp16 a;
-  twosComp16 b;
+  twosComp15 a;
+  twosComp15 b;
 
   negative16 (a - b)
 };

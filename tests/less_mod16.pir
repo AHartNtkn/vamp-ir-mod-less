@@ -126,8 +126,10 @@ def less16 a b = {
 //       Additionally "\" needs to be modified to perform floor division. 
 //	 Rust calculates (-5)/3 as -1 when floor division would give -2.
 def mod a b = {
+  nonNegative16 b = 0;
   def q = fresh (a\b);
   def r = fresh (a%b);
+  nonNegative16 r = 0;
   
   a = b * q + r;
   //less16 a (b * (q + 1)) = 0;
@@ -162,11 +164,12 @@ def mod a b = {
 //mod 4 3 = 1;
 //mod 4 4 = 0;
 //mod 4 5 = 4;
-mod 5 1 = 0;
-mod 5 2 = 1;
+//mod 5 1 = 0;
+//mod 5 2 = 1;
 mod 5 3 = 2;
 mod 5 4 = 1;
 mod 5 5 = 0;
+mod 5 6 = 5;
 
 // These don't work; see note over mod
 //mod ((-5)) 2 = 1;

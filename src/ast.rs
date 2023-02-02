@@ -695,18 +695,9 @@ impl TExpr {
         let mut expr =
             Self::parse_expr8(pair).expect("expression should start with product");
         while let Some(pair) = pairs.next_back() {
-            let op = UnaryOp::parse(pair).expect("expected arithmetic operator");
+            let op = UnaryOp::parse(pair).expect("expected unary arithmetic operator");
             expr = Expr::Unary(op, Box::new(expr)).type_expr(None);
         }
-        
-        //while let Some(pair) = pairs.next_back() {
-        //    if pair.as_rule() == Rule::unaryOp {
-        //    	let op = UnaryOp::parse(pair).expect("expected unary arithmetic operator");
-        //        expr = Expr::Unary(op, Box::new(expr)).type_expr(None);
-        //    } else {
-        //        unreachable!("only unary operations should occur here");
-        //    }
-        //}
         
         Some(expr)
     }

@@ -637,15 +637,6 @@ fn evaluate(
                 }
             }
         },
-        // XXX
-        //Expr::Negate(expr1) => {
-        //    let expr1 = evaluate(expr1, flattened, bindings, prover_defs, field_ops, gen);
-        //    match expr1.v {
-        //        Expr::Constant(c1) =>
-        //            Expr::Constant(field_ops.negate(c1)).type_expr(expr.t.clone()),
-        //        _ => Expr::Negate(Box::new(expr1)).type_expr(expr.t.clone()),
-        //    }
-        //},
         Expr::Constant(c) =>
             Expr::Constant(field_ops.canonical(c.clone())).type_expr(expr.t.clone()),
         Expr::Unit => expr.clone(),

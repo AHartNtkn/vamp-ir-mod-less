@@ -382,7 +382,7 @@ pub enum Expr {
     Sequence(Vec<TExpr>),
     Product(Box<TExpr>, Box<TExpr>),
     Infix(InfixOp, Box<TExpr>, Box<TExpr>),
-    Negate(Box<TExpr>),
+    Unary(UnaryOp, Box<TExpr>),
     Application(Box<TExpr>, Box<TExpr>),
     Constant(BigInt),
     Variable(Variable),
@@ -404,7 +404,7 @@ impl Expr {
             },
             Self::Infix(InfixOp::Equal, _, _) => Some(Type::Unit),
             Self::Infix(_, _, _) => Some(Type::Int),
-            Self::Negate(_) => Some(Type::Int),
+            Self::Unary(_, _) => Some(Type::Int),
             Self::Constant(_) => Some(Type::Int),
             Self::LetBinding(_, expr) => expr.t.clone(),
             Self::Application(_, _) | Self::Match(_) | Self::Variable(_) |
@@ -443,10 +443,12 @@ impl :: bincode :: Encode for Expr
                 ; :: bincode :: Encode :: encode(field_0, encoder) ? ; ::
                 bincode :: Encode :: encode(field_1, encoder) ? ; :: bincode
                 :: Encode :: encode(field_2, encoder) ? ; Ok(())
-            }, Self :: Negate(field_0) =>
+            }, Self :: Unary(field_0, field_1) =>
             {
                 < u32 as :: bincode :: Encode > :: encode(& (4u32), encoder) ?
-                ; :: bincode :: Encode :: encode(field_0, encoder) ? ; Ok(())
+                ; :: bincode :: Encode :: encode(field_0, encoder) ? ; ::
+                bincode :: Encode :: encode(field_1, encoder) ? ; Ok(())
+                
             }, Self :: Application(field_0, field_1) =>
             {
                 < u32 as :: bincode :: Encode > :: encode(& (5u32), encoder) ?
@@ -508,8 +510,11 @@ impl :: bincode :: Decode for Expr
                 :: Decode :: decode(decoder) ?, 2 : :: bincode :: Decode ::
                 decode(decoder) ?,
             }), 4u32 =>
-            Ok(Self :: Negate
-            { 0 : :: bincode :: Decode :: decode(decoder) ?, }), 5u32 =>
+            Ok(Self :: Unary
+            {
+                0 : :: bincode :: Decode :: decode(decoder) ?, 1 : :: bincode
+                :: Decode :: decode(decoder) ?,
+            }), 5u32 =>
             Ok(Self :: Application
             {
                 0 : :: bincode :: Decode :: decode(decoder) ?, 1 : :: bincode
@@ -567,6 +572,7 @@ where T: Num + Neg<Output = T> {
 }
 
 impl TExpr {
+
     pub fn parse(pair: Pair<Rule>) -> Option<Self> {
         if pair.as_rule() != Rule::expr { return None }
         let string = pair.as_str();
@@ -689,12 +695,19 @@ impl TExpr {
         let mut expr =
             Self::parse_expr8(pair).expect("expression should start with product");
         while let Some(pair) = pairs.next_back() {
-            if pair.as_rule() == Rule::negate {
-                expr = Expr::Negate(Box::new(expr)).type_expr(None);
-            } else {
-                unreachable!("only negative signs should occur here");
-            }
+            let op = UnaryOp::parse(pair).expect("expected arithmetic operator");
+            expr = Expr::Unary(op, Box::new(expr)).type_expr(None);
         }
+        
+        //while let Some(pair) = pairs.next_back() {
+        //    if pair.as_rule() == Rule::unaryOp {
+        //    	let op = UnaryOp::parse(pair).expect("expected unary arithmetic operator");
+        //        expr = Expr::Unary(op, Box::new(expr)).type_expr(None);
+        //    } else {
+        //        unreachable!("only unary operations should occur here");
+        //    }
+        //}
+        
         Some(expr)
     }
 
@@ -758,7 +771,8 @@ impl fmt::Display for TExpr {
                 write!(f, "({}, {})", expr1, expr2)?,
             Expr::Infix(op, expr1, expr2) =>
                 write!(f, "({}{}{})", expr1, op, expr2)?,
-            Expr::Negate(expr) => write!(f, "-{}", expr)?,
+            Expr::Unary(op, expr1) =>
+                write!(f, "({}{})", op, expr1)?,
             Expr::Application(expr1, expr2) => write!(f, "{} {}", expr1, expr2)?,
             Expr::Constant(val) => write!(f, "{}", val)?,
             Expr::Variable(var) => write!(f, "{}", var)?,
@@ -841,6 +855,32 @@ impl fmt::Display for InfixOp {
             Self::Exponentiate => write!(f, "^"),
             Self::IntDivide => write!(f, "\\"),
             Self::Modulo => write!(f, "%"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Encode, Decode, Eq, PartialEq)]
+pub enum UnaryOp {
+    Negate,
+    Sign
+}
+
+impl UnaryOp {
+    pub fn parse(pair: Pair<Rule>) -> Option<Self> {
+        if pair.as_rule() != Rule::unaryOp { return None }
+        match pair.as_span().as_str() {
+            "-" => Some(Self::Negate),
+            "$" => Some(Self::Sign),
+            _ => unreachable!("Encountered unknown unary operator")
+        }
+    }
+}
+
+impl fmt::Display for UnaryOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Negate => write!(f, "-"),
+            Self::Sign => write!(f, "$")
         }
     }
 }

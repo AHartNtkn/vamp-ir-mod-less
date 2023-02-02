@@ -68,7 +68,7 @@ fn allocate_expr_types(
             allocate_expr_types(expr1, gen);
             allocate_expr_types(expr2, gen);
         },
-        Expr::Negate(expr1) => {
+        Expr::Unary(_, expr1) => {
             allocate_expr_types(expr1, gen);
         },
         Expr::Function(fun) => {
@@ -314,7 +314,7 @@ pub fn strip_expr_types(expr: &mut TExpr) {
                 strip_expr_types(expr2);
             }
         },
-        Expr::Negate(expr) => {
+        Expr::Unary(_, expr) => {
             strip_expr_types(expr);
         },
         Expr::Constant(_) | Expr::Unit | Expr::Variable(_) => {},
@@ -497,7 +497,7 @@ fn infer_expr_types(
             infer_expr_types(expr1, env, vars, types, gen);
             infer_expr_types(expr2, env, vars, types, gen);
         },
-        Expr::Negate(expr1) => {
+        Expr::Unary(_, expr1) => {
             let expr_var = expr_type_var(expr);
             let expr1_var = expr_type_var(expr1);
             // (-a): int

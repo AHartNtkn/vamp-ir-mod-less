@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::typecheck::{infer_module_types, print_types, expand_pattern_variables, strip_module_types, expand_expr_variables, Type};
-use crate::ast::{Module, Definition, TExpr, Pat, TPat, VariableId, LetBinding, Variable, InfixOp, Expr, Intrinsic, Function};
+use crate::ast::{Module, Definition, TExpr, Pat, TPat, VariableId, LetBinding, Variable, UnaryOp, InfixOp, Expr, Intrinsic, Function};
 use std::hash::Hash;
 use ark_ff::{One, Zero};
 use num_traits::sign::Signed;
@@ -53,7 +53,7 @@ fn refresh_expr_variables(
                 refresh_expr_variables(expr2, &map, prover_defs, gen);
             }
         },
-        Expr::Negate(expr) => {
+        Expr::Unary(_, expr) => {
             refresh_expr_variables(expr, map, prover_defs, gen);
         },
         Expr::Constant(_) | Expr::Unit => {},
@@ -240,7 +240,7 @@ fn number_expr_variables(
             number_expr_variables(expr1, locals, globals, gen);
             number_expr_variables(expr2, locals, globals, gen);
         },
-        Expr::Negate(expr) => {
+        Expr::Unary(_, expr) => {
             number_expr_variables(expr, locals, globals, gen);
         },
         Expr::Constant(_) | Expr::Unit => {},
@@ -325,8 +325,8 @@ where U: Eq + Hash + Clone {
 pub trait FieldOps {
     // Puts the given big integer in canonical form
     fn canonical(&self, num: BigInt) -> BigInt;
-    // Negates the given big integer over the given field
-    fn negate(&self, num: BigInt) -> BigInt;
+    // Completes the given unary operation over the given field
+    fn unary(&self, op: UnaryOp, num: BigInt) -> BigInt;
     // Completes the given infix operation over the given field
     fn infix(&self, op: InfixOp, lhs: BigInt, rhs: BigInt) -> BigInt;
 }
@@ -389,7 +389,7 @@ fn capture_env(val: &mut TExpr, new_bindings: HashMap<VariableId, TExpr>) {
             capture_env(expr1, new_bindings.clone());
             capture_env(expr2, new_bindings);
         },
-        Expr::Unit | Expr::Infix(_, _, _) | Expr::Negate(_) |
+        Expr::Unit | Expr::Infix(_, _, _) | Expr::Unary(_, _) |
         Expr::Constant(_) | Expr::Variable(_) => {},
         Expr::Application(_, _) | Expr::Sequence(_) | Expr::LetBinding(_, _) |
         Expr::Match(_) => {
@@ -620,14 +620,32 @@ fn evaluate(
                 }
             }
         },
-        Expr::Negate(expr1) => {
+        Expr::Unary(op, expr1) => {
             let expr1 = evaluate(expr1, flattened, bindings, prover_defs, field_ops, gen);
-            match expr1.v {
+            match &expr1.v {
                 Expr::Constant(c1) =>
-                    Expr::Constant(field_ops.negate(c1)).type_expr(expr.t.clone()),
-                _ => Expr::Negate(Box::new(expr1)).type_expr(expr.t.clone()),
+                    Expr::Constant(field_ops.unary(*op, c1.clone())).type_expr(expr.t.clone()),
+                _ => {
+                    let val = unary_op(op.clone(), expr1);
+                    let var = Variable::new(gen.generate_id());
+                    let binding = Definition(LetBinding(
+                        Pat::Variable(var.clone()).type_pat(expr.t.clone()),
+                        Box::new(val),
+                    ));
+                    flattened.defs.push(binding);
+                    Expr::Variable(var).type_expr(expr.t.clone())
+                }
             }
         },
+        // XXX
+        //Expr::Negate(expr1) => {
+        //    let expr1 = evaluate(expr1, flattened, bindings, prover_defs, field_ops, gen);
+        //    match expr1.v {
+        //        Expr::Constant(c1) =>
+        //            Expr::Constant(field_ops.negate(c1)).type_expr(expr.t.clone()),
+        //        _ => Expr::Negate(Box::new(expr1)).type_expr(expr.t.clone()),
+        //    }
+        //},
         Expr::Constant(c) =>
             Expr::Constant(field_ops.canonical(c.clone())).type_expr(expr.t.clone()),
         Expr::Unit => expr.clone(),
@@ -770,7 +788,7 @@ fn collect_expr_variables(
             collect_expr_variables(expr1, map);
             collect_expr_variables(expr2, map);
         },
-        Expr::Negate(expr1) => {
+        Expr::Unary(_, expr1) => {
             collect_expr_variables(expr1, map);
         },
         Expr::Function(fun) => {
@@ -850,6 +868,20 @@ fn infix_op(op: InfixOp, e1: TExpr, e2: TExpr) -> TExpr {
     }
 }
 
+/* Produce the given unary operation making sure to do any straightforward
+ * simplifications. */
+fn unary_op(op: UnaryOp, e1: TExpr) -> TExpr {
+    match (op, &e1.v) {
+        (UnaryOp::Negate, Expr::Constant(c)) if c.is_zero() => e1,
+        (UnaryOp::Sign, Expr::Constant(c)) if c.is_zero() => e1,
+        (_, _) =>
+            TExpr {
+                v: Expr::Unary(op, Box::new(e1)),
+                t: Some(Type::Int),
+            },
+    }
+}
+
 /* Flatten the given binding down into the set of constraints it defines. */
 fn flatten_binding(
     pat: &TPat,
@@ -860,7 +892,7 @@ fn flatten_binding(
         (Pat::Variable(_), Expr::Function(_)) => {},
         (Pat::Variable(_),
          Expr::Variable(_) | Expr::Constant(_) |
-         Expr::Infix(_, _, _) | Expr::Negate(_)) => {
+         Expr::Infix(_, _, _) | Expr::Unary(_, _)) => {
             flattened.defs.push(Definition(LetBinding(
                 pat.clone(),
                 Box::new(expr.clone()),
@@ -868,7 +900,7 @@ fn flatten_binding(
         },
         (Pat::Constant(pat),
          Expr::Variable(_) | Expr::Constant(_) |
-                 Expr::Infix(_, _, _) | Expr::Negate(_)) => {
+                 Expr::Infix(_, _, _) | Expr::Unary(_, _)) => {
             flattened.exprs.push(Expr::Infix(
                 InfixOp::Equal,
                 Box::new(Expr::Constant(pat.clone()).type_expr(Some(Type::Int))),
@@ -899,9 +931,9 @@ fn flatten_equals(
             flatten_equals(expr11, expr21, flattened);
             flatten_equals(expr12, expr22, flattened);
         },
-        (Expr::Variable(_) | Expr::Negate(_) |
+        (Expr::Variable(_) | Expr::Unary(_, _) |
          Expr::Infix(_, _, _) | Expr::Constant(_),
-         Expr::Variable(_) | Expr::Negate(_) |
+         Expr::Variable(_) | Expr::Unary(_, _) |
          Expr::Infix(_, _, _) | Expr::Constant(_)) => {
             flattened.exprs.push(Expr::Infix(
                 InfixOp::Equal,
@@ -942,12 +974,15 @@ fn flatten_expr_to_3ac(
             push_constraint_def(flattened, pat.clone(), expr.clone());
             pat
         },
-        (out, Expr::Negate(n)) => {
-            let out1_term = flatten_expr_to_3ac(None, n, flattened, gen);
-            let rhs = Expr::Negate(Box::new(out1_term.to_expr()));
+        (out, Expr::Unary(op, e1)) => {
+            let out1_term = flatten_expr_to_3ac(None, e1, flattened, gen);
+            let rhs = unary_op(
+                *op,
+                out1_term.to_expr(),
+            );
             let out_var = Variable::new(gen.generate_id());
             let out = out.unwrap_or(Pat::Variable(out_var.clone()).type_pat(expr.t.clone()));
-            push_constraint_def(flattened, out.clone(), rhs.type_expr(Some(Type::Int)));
+            push_constraint_def(flattened, out.clone(), rhs);
             out
         },
         (out, Expr::Infix(op, e1, e2)) if *op != InfixOp::Exponentiate => {
@@ -1193,7 +1228,7 @@ pub fn copy_propagate_expr(
             copy_propagate_expr(expr1, substitutions);
             copy_propagate_expr(expr2, substitutions);
         },
-        Expr::Negate(expr1) | Expr::Function(Function { body: expr1, .. }) => {
+        Expr::Unary(_, expr1) | Expr::Function(Function { body: expr1, .. }) => {
             copy_propagate_expr(expr1, substitutions);
         },
         Expr::LetBinding(binding, expr2) => {

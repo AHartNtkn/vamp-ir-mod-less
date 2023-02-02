@@ -1,4 +1,4 @@
-use crate::ast::{Module, VariableId, TExpr, InfixOp, Pat, Expr};
+use crate::ast::{Module, VariableId, TExpr, UnaryOp, InfixOp, Pat, Expr};
 use crate::transform::{collect_module_variables, FieldOps};
 use ark_ff::PrimeField;
 use ark_ec::TEModelParameters;
@@ -66,7 +66,18 @@ fn evaluate_expr<F>(
                 val
             }
         },
-        Expr::Negate(e) => -evaluate_expr(e, defs, assigns),
+        Expr::Unary(UnaryOp::Negate, e) =>
+            -evaluate_expr(e, defs, assigns),
+        Expr::Unary(UnaryOp::Sign, e) => {
+            	let rec = evaluate_expr(&e, defs, assigns);
+            	let ff = Into::<BigUint>::into((-F::one())/(F::one() + F::one())).to_bigint().unwrap();
+            	let c = Into::<BigUint>::into(rec).to_bigint().unwrap();
+            	if 0.to_bigint().unwrap() <= c && c <= ff { 
+            		F::zero()
+            	} else {
+            		F::one()
+            	}
+            },
         Expr::Infix(InfixOp::Add, a, b) =>
             evaluate_expr(&a, defs, assigns) +
             evaluate_expr(&b, defs, assigns),
@@ -100,10 +111,21 @@ impl<F> FieldOps for PrimeFieldOps<F> where F: PrimeField {
         let b = make_constant::<F>(&a);
         Into::<BigUint>::into(b).to_bigint().unwrap()
     }
-    /* Evaluate the given negation expression in the given prime field. */
-    fn negate(&self, a: BigInt) -> BigInt {
+    /* Evaluate the given unary expression in the given prime field. */
+    fn unary(&self, op: UnaryOp, a: BigInt) -> BigInt {
         let b = make_constant::<F>(&a);
-        Into::<BigUint>::into(-b).to_bigint().unwrap()
+        match op {
+            UnaryOp::Negate => Into::<BigUint>::into(-b).to_bigint().unwrap(),
+            UnaryOp::Sign => {
+            	let ff = Into::<BigUint>::into((-F::one())/(F::one() + F::one())).to_bigint().unwrap();
+            	let c = Into::<BigUint>::into(b).to_bigint().unwrap();
+            	if 0.to_bigint().unwrap() <= c && c <= ff { 
+            		0.to_bigint().unwrap()
+            	} else {
+            		1.to_bigint().unwrap()
+            	}
+            }
+        }
     }
     /* Evaluate the given infix expression in the given prime field. */
     fn infix(&self, op: InfixOp, a: BigInt, b: BigInt) -> BigInt {
@@ -283,7 +305,7 @@ where
                     // v1 = -c2
                     (
                         Expr::Variable(v1),
-                        Expr::Negate(e2),
+                        Expr::Unary(UnaryOp::Negate, e2),
                     ) if matches!(&e2.v, Expr::Constant(c2) if {
                         composer.arithmetic_gate(|gate| {
                             gate.witness(inputs[&v1.id], zero, Some(zero))
@@ -295,7 +317,7 @@ where
                     // v1 = -v2
                     (
                         Expr::Variable(v1),
-                        Expr::Negate(e2),
+                        Expr::Unary(UnaryOp::Negate, e2),
                     ) if matches!(&e2.v, Expr::Variable(v2) if {
                         composer.arithmetic_gate(|gate| {
                             gate.witness(inputs[&v1.id], inputs[&v2.id], Some(zero))
@@ -574,7 +596,7 @@ where
                     // c1 = -c2
                     (
                         Expr::Constant(c1),
-                        Expr::Negate(e2),
+                        Expr::Unary(UnaryOp::Negate, e2),
                     ) if matches!(&e2.v, Expr::Constant(c2) if {
                         composer.arithmetic_gate(|gate| {
                             gate.witness(zero, zero, Some(zero))
@@ -586,7 +608,7 @@ where
                     // c1 = -v2
                     (
                         Expr::Constant(c1),
-                        Expr::Negate(e2),
+                        Expr::Unary(UnaryOp::Negate, e2),
                     ) if matches!(&e2.v, Expr::Variable(v2) if {
                         composer.arithmetic_gate(|gate| {
                             gate.witness(inputs[&v2.id], zero, Some(zero))

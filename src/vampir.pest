@@ -42,7 +42,7 @@ expr5 = { expr6 ~ ( &("*" | "/" | "\\" | "%") ~ infixOp ~ expr6 )* }
 
 expr6 = { expr7 ~ ( &"^" ~ infixOp ~ expr7 )* }
 
-expr7 = { "(" ~ negate+ ~ expr8 ~ ")" | expr8 }
+expr7 = { "(" ~ unaryOp+ ~ expr8 ~ ")" | expr8 }
 
 expr8 = { expr9+ }
 
@@ -50,7 +50,7 @@ expr9 = { "(" ~ expr ~ ")" | valueName | constant | &"fun" ~ expr | &"def" ~ exp
 
 function = { "fun" ~ pattern+ ~ &"{" ~ expr }
 
-negate = { "-" }
+unaryOp = { "-" | "$" }
 
 definition = { "def" ~ letBinding }
 

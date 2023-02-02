@@ -92,6 +92,7 @@ def negative16 a = 1 - nonNegative16 a;
 // Test if a is less than b
 def less16 a b = {
   // Range checks
+  // Are these necessary?
   twosComp15 a;
   twosComp15 b;
 

@@ -121,7 +121,7 @@ def less16 a b = {
 
 // Calculate the modulus of a and b
 // Note: This gives correct answers for a >= 0 and b > 0.
-//       For arbitrary a, "%" needs to be modified to give positive values when b < 0.
+//       For arbitrary a, "%" needs to be modified to give positive values when a < 0.
 //	 Rust calculates (-5) % 3 as -1 when the actual answer should be 1.
 //       Additionally "\" needs to be modified to perform floor division. 
 //	 Rust calculates (-5)/3 as -1 when floor division would give -2.

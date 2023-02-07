@@ -120,6 +120,15 @@ def less16 a b = {
 //less16 20 ((-10)) = 1;
 //less16 ((-10)) 20 = 0;
 
+// Pointwise Variant
+def pointLess16 f g p q x = {
+  def t = less16 (f x) (g x);
+  (1 - t) * (p x) + t * (q x)
+};
+
+//pointLess16 (fun x  { x + 10 }) (fun x  { x * x }) (fun x  { x + 1 }) (fun x  { x - 1 }) 2 = 1;
+//pointLess16 (fun x  { x + 10 }) (fun x  { x * x }) (fun x  { x + 1 }) (fun x  { x - 1 }) 10 = 11;
+
 // Calculate the modulus of a and b
 // Note: This gives correct answers for a >= 0 and b > 0.
 //       For arbitrary a, "%" needs to be modified to give positive values when a < 0.
